@@ -11,13 +11,18 @@
 
 [functions]
   included_files = [
-    "!node_modules/@next/swc-*/**/*",
-    "!node_modules/typescript/**/*",
-    "!node_modules/prisma/**/*",
-    "!node_modules/@prisma/engines/**/*",
-    "!node_modules/@playwright/**/*",
-    "!node_modules/playwright/**/*",
-    "!node_modules/playwright-core/**/*"
+    "!node_modules/@next/**",
+    "!node_modules/@prisma/engines/**",
+    "!node_modules/@playwright/**",
+    "!node_modules/playwright/**",
+    "!node_modules/playwright-core/**",
+    "!node_modules/@img/**",
+    "!node_modules/sharp/**",
+    "!node_modules/.cache/**",
+    "!node_modules/typescript/**",
+    "!node_modules/prisma/**",
+    "!node_modules/eslint/**",
+    "!node_modules/@eslint/**"
   ]
 
 # Cache control for static assets
