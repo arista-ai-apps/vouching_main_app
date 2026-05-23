@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { uploadPDF } from '@/lib/cloudinary';
-import { extractInvoiceData } from '@/lib/services/extraction';
-import { reconcileSingleInvoice } from '@/lib/services/reconciliation';
 
 // POST /api/v1/files/upload
+// 1. Reads the PDF buffer
+// 2. Creates a DB record with status 'processing'
+// 3. Fire-and-forgets extraction via /api/v1/files/[id]/process (passes buffer as base64)
+// 4. Returns immediately — client polls for status updates
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -18,80 +19,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify engagement exists
     const engagement = await prisma.engagement.findUnique({
       where: { id: parseInt(engagementId) },
     });
-
     if (!engagement) {
-      return NextResponse.json(
-        { error: 'Engagement not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Engagement not found' }, { status: 404 });
     }
 
-    // Check file size (max 50MB)
     if (file.size > 50 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: 'File too large (max 50MB)' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'File too large (max 50MB)' }, { status: 400 });
     }
 
-    // Convert file to buffer
+    // Read buffer now — must happen before responding
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Upload to Cloudinary
-    console.log(`[API] Uploading ${file.name} to Cloudinary...`);
-    const cloudinaryResult = await uploadPDF(buffer, file.name, parseInt(engagementId));
-
-    // Create database record
+    // Create DB record — filePath is empty since we no longer store PDFs
     const dbFile = await prisma.uploadedFile.create({
       data: {
         engagementId: parseInt(engagementId),
         filename: file.name,
-        filePath: cloudinaryResult.secure_url,
-        status: 'uploaded',
+        filePath: '',
+        status: 'processing',
       },
     });
 
-    // Trigger extraction in the background
-    // Note: In production, use Trigger.dev or a similar service
-    // For now, we'll do it synchronously
-    try {
-      console.log(`[API] Starting extraction for file ${dbFile.id}...`);
-      await extractInvoiceData(buffer, dbFile.id, parseInt(engagementId));
+    // Fire-and-forget: pass buffer as base64 to the process route.
+    // We do NOT await this — response goes back to the client immediately.
+    const baseUrl = request.nextUrl.origin;
+    fetch(`${baseUrl}/api/v1/files/${dbFile.id}/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        engagement_id: parseInt(engagementId),
+        buffer_b64: buffer.toString('base64'),
+      }),
+    }).catch(err =>
+      console.error(`[UPLOAD] Failed to trigger processing for file ${dbFile.id}:`, err)
+    );
 
-      // Reconcile after extraction
-      const invoice = await prisma.extractedInvoice.findFirst({
-        where: { fileId: dbFile.id },
-      });
-
-      if (invoice) {
-        await reconcileSingleInvoice(invoice.id);
-      }
-
-      // Update file status to completed
-      await prisma.uploadedFile.update({
-        where: { id: dbFile.id },
-        data: { status: 'completed' },
-      });
-    } catch (error) {
-      console.error('[API] Background processing error:', error);
-      // File was already marked as failed by extraction service
-    }
+    console.log(`[UPLOAD] File ${dbFile.id} (${file.name}) queued — responding immediately.`);
 
     return NextResponse.json({
       id: dbFile.id,
       filename: dbFile.filename,
-      status: dbFile.status,
+      status: 'processing',
       created_at: dbFile.createdAt,
     });
+
   } catch (error) {
-    console.error('[API] POST /files/upload error:', error);
-    return NextResponse.json(
-      { error: 'Failed to upload file' },
-      { status: 500 }
-    );
+    console.error('[UPLOAD] Error:', error);
+    return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });
   }
 }

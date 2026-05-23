@@ -1,11 +1,10 @@
-import * as pdfjs from 'pdfjs-dist';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.js';
 import { OpenAI } from 'openai';
 import { prisma } from '../prisma';
 
-// Initialize PDF.js worker
-if (typeof window === 'undefined') {
-  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-}
+// Node.js server: disable web worker (pdfjs runs inline)
+pdfjs.GlobalWorkerOptions.workerSrc = '';
+
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

@@ -42,9 +42,7 @@ function calculateSimilarityScore(invoice: InvoiceData, register: RegisterData):
 
   // Vendor name match (20% weight)
   if (invoice.vendorName && register.vendor_name) {
-    const fuse = new Fuse([register.vendor_name], {
-      threshold: 0.3,
-    });
+    const fuse = new Fuse([register.vendor_name], { threshold: 0.3 });
     if (fuse.search(invoice.vendorName).length > 0) {
       score += 20;
     }
@@ -52,7 +50,8 @@ function calculateSimilarityScore(invoice: InvoiceData, register: RegisterData):
 
   // Amount match (20% weight) - within 5% tolerance
   if (invoice.totalValue && register.total_value) {
-    const percentDiff = Math.abs((invoice.totalValue - register.total_value) / register.total_value) * 100;
+    const percentDiff =
+      Math.abs((invoice.totalValue - register.total_value) / register.total_value) * 100;
     if (percentDiff <= 5) {
       score += 20 * (1 - percentDiff / 5);
     }
@@ -77,81 +76,60 @@ export async function reconcileSingleInvoice(invoiceId: number): Promise<void> {
 
     const { engagementId } = invoice.file;
 
-    // Get all registers for this engagement
+    // Get all register rows for this engagement
     const registers = await prisma.registerRow.findMany({
-      where: {
-        register: {
-          engagementId,
-        },
-      },
-      include: {
-        register: true,
-      },
+      where: { register: { engagementId } },
+      include: { register: true },
     });
 
-    if (registers.length === 0) {
-      console.warn(`[RECONCILIATION] No registers found for engagement: ${engagementId}`);
-      return;
-    }
+    let bestMatch: { registerRow: (typeof registers)[0]; score: number } | null = null;
 
-    let bestMatch: {
-      registerRow: (typeof registers)[0];
-      score: number;
-    } | null = null;
-
-    // Find best matching register row
+    // Find best matching register row (if any registers exist)
     for (const reg of registers) {
-      const registerData: RegisterData = {
-        invoice_number: reg.invoiceNumber,
-        invoice_date: reg.invoiceDate,
-        vendor_name: reg.vendorName,
-        taxable_value: reg.taxableValue,
-        total_value: reg.totalValue,
-      };
-
-      const invoiceData: InvoiceData = {
-        id: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
-        invoiceDate: invoice.invoiceDate,
-        vendorName: invoice.vendorName,
-        taxableValue: invoice.taxableValue,
-        totalValue: invoice.totalValue,
-      };
-
-      const score = calculateSimilarityScore(invoiceData, registerData);
-
+      const score = calculateSimilarityScore(
+        {
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.invoiceDate,
+          vendorName: invoice.vendorName,
+          taxableValue: invoice.taxableValue,
+          totalValue: invoice.totalValue,
+        },
+        {
+          invoice_number: reg.invoiceNumber,
+          invoice_date: reg.invoiceDate,
+          vendor_name: reg.vendorName,
+          taxable_value: reg.taxableValue,
+          total_value: reg.totalValue,
+        }
+      );
       if (!bestMatch || score > bestMatch.score) {
         bestMatch = { registerRow: reg, score };
       }
     }
 
-    // Create or update reconciliation result
-    let matchStatus = 'unmatched';
-    if (bestMatch && bestMatch.score > 60) {
-      matchStatus = 'matched';
-    }
+    // Determine match status — always write a result even if no register uploaded
+    const matchStatus =
+      registers.length === 0
+        ? 'no_register'
+        : bestMatch && bestMatch.score > 60
+        ? 'matched'
+        : 'unmatched';
 
-    await prisma.reconciliationResult.upsert({
-      where: {
-        // Using a composite unique constraint
-        id: 0, // This won't work, need to handle differently
-      },
-      update: {
-        matchStatus,
-        matchScore: bestMatch?.score || 0,
-        registerRowId: bestMatch?.registerRow.id || null,
-      },
-      create: {
+    // Delete existing result for this invoice, then insert fresh
+    await prisma.reconciliationResult.deleteMany({ where: { invoiceId } });
+    await prisma.reconciliationResult.create({
+      data: {
         engagementId,
         invoiceId,
-        registerRowId: bestMatch?.registerRow.id || null,
+        registerRowId: bestMatch?.registerRow.id ?? null,
         matchStatus,
-        matchScore: bestMatch?.score || 0,
+        matchScore: bestMatch?.score ?? 0,
       },
     });
 
     console.log(
-      `[RECONCILIATION] Match result: ${matchStatus} (score: ${bestMatch?.score || 0}) for invoice: ${invoice.invoiceNumber}`
+      `[RECONCILIATION] Result: ${matchStatus} (score: ${bestMatch?.score ?? 0}) for invoice: ${invoice.invoiceNumber}`
     );
   } catch (error) {
     console.error('[RECONCILIATION] Error:', error);
@@ -163,16 +141,10 @@ export async function runFullReconciliation(engagementId: number): Promise<void>
   console.log(`[RECONCILIATION] Starting full reconciliation for engagement: ${engagementId}`);
 
   try {
-    // Get all invoices for this engagement
     const invoices = await prisma.extractedInvoice.findMany({
-      where: {
-        file: {
-          engagementId,
-        },
-      },
+      where: { file: { engagementId } },
     });
 
-    // Reconcile each invoice
     for (const invoice of invoices) {
       await reconcileSingleInvoice(invoice.id);
     }

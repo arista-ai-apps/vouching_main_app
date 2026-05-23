@@ -58,9 +58,9 @@ export default function UploadsPortal() {
     setLoading(true);
     try {
       const [pReg, sReg, gReg, pRows, sRows, gRows] = await Promise.all([
-        fetch(`${API_BASE}/registers/${engagementId}`),
-        fetch(`${API_BASE}/registers/sales/${engagementId}`),
-        fetch(`${API_BASE}/registers/gstr2b/${engagementId}`),
+        fetch(`${API_BASE}/registers?engagement_id=${engagementId}&register_type=purchase`),
+        fetch(`${API_BASE}/registers?engagement_id=${engagementId}&register_type=sales`),
+        fetch(`${API_BASE}/registers?engagement_id=${engagementId}&register_type=gstr2b`),
         fetch(`${API_BASE}/registers/${engagementId}/rows`),
         fetch(`${API_BASE}/registers/sales/${engagementId}/rows`),
         fetch(`${API_BASE}/registers/gstr2b/${engagementId}/rows`),
