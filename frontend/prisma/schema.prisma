@@ -1,0 +1,236 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             Int     @id @default(autoincrement())
+  email          String  @unique
+  hashedPassword String  @map("hashed_password")
+  role           String  @default("article") // "article", "manager", "partner"
+
+  @@map("users")
+}
+
+model Client {
+  id          Int          @id @default(autoincrement())
+  name        String
+  pan         String?
+  gstin       String?
+  address     String?
+  engagements Engagement[]
+
+  @@map("clients")
+}
+
+model Engagement {
+  id                 Int                  @id @default(autoincrement())
+  clientId           Int                  @map("client_id")
+  periodStart        DateTime             @map("period_start")
+  periodEnd          DateTime             @map("period_end")
+  status             String               @default("active")
+  client             Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  files              UploadedFile[]
+  billOfSaleFiles    BillOfSaleFile[]
+  registers          Register[]
+  reconciliationResults ReconciliationResult[]
+  exceptions         ExceptionLog[]
+  hsnRecommendations HsnRecommendation[]
+  taxTypeMismatches  TaxTypeMismatch[]
+
+  @@map("engagements")
+}
+
+model UploadedFile {
+  id                 Int                  @id @default(autoincrement())
+  engagementId       Int                  @map("engagement_id")
+  filename           String
+  filePath           String               @map("file_path")
+  status             String               @default("processing")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  engagement         Engagement           @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  invoices           ExtractedInvoice[]
+
+  @@map("uploaded_files")
+}
+
+model ExtractedInvoice {
+  id                  Int                    @id @default(autoincrement())
+  fileId              Int                    @map("file_id")
+  invoiceNumber       String?                @map("invoice_number")
+  hsnCode             String?                @map("hsn_code")
+  invoiceDate         DateTime?              @map("invoice_date")
+  vendorName          String?                @map("vendor_name")
+  vendorGstin         String?                @map("vendor_gstin")
+  buyerName           String?                @map("buyer_name")
+  buyerGstin          String?                @map("buyer_gstin")
+  shippingAddress     String?                @map("shipping_address")
+  billingAddress      String?                @map("billing_address")
+  placeOfSupply       String?                @map("place_of_supply")
+  descriptionOfGoods  String?                @map("description_of_goods")
+  ewayBillNo          String?                @map("eway_bill_no")
+  taxableValue        Float?                 @map("taxable_value")
+  discount            Float?                 @map("discount")
+  totalValue          Float?                 @map("total_value")
+  cgst                Float?                 @map("cgst")
+  sgst                Float?                 @map("sgst")
+  igst                Float?                 @map("igst")
+  cgstRate            Float?                 @map("cgst_rate")
+  sgstRate            Float?                 @map("sgst_rate")
+  igstRate            Float?                 @map("igst_rate")
+  confidenceScore     Float?                 @map("confidence_score")
+  status              String                 @default("pending_review")
+  file                UploadedFile           @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  items               ExtractedInvoiceItem[]
+  reconciliationResults ReconciliationResult[]
+  taxTypeMismatches   TaxTypeMismatch[]
+
+  @@map("extracted_invoices")
+}
+
+model ExtractedInvoiceItem {
+  id           Int              @id @default(autoincrement())
+  invoiceId    Int              @map("invoice_id")
+  description  String?
+  hsnCode      String?          @map("hsn_code")
+  quantity     Float?
+  unit         String?
+  unitPrice    Float?           @map("unit_price")
+  discount     Float?
+  taxableValue Float?           @map("taxable_value")
+  invoice      ExtractedInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("extracted_invoice_items")
+}
+
+model Register {
+  id           Int           @id @default(autoincrement())
+  engagementId Int           @map("engagement_id")
+  registerType String        @map("register_type") // "purchase", "sales", "gstr2b"
+  filename     String
+  filePath     String?       @map("file_path")
+  engagement   Engagement    @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  rows         RegisterRow[]
+
+  @@map("registers")
+}
+
+model RegisterRow {
+  id            Int                    @id @default(autoincrement())
+  registerId    Int                    @map("register_id")
+  invoiceNumber String?                @map("invoice_number")
+  invoiceDate   DateTime?              @map("invoice_date")
+  vendorName    String?                @map("vendor_name")
+  vendorGstin   String?                @map("vendor_gstin")
+  taxableValue  Float?                 @map("taxable_value")
+  totalValue    Float?                 @map("total_value")
+  register      Register               @relation(fields: [registerId], references: [id], onDelete: Cascade)
+  reconciliationResults ReconciliationResult[]
+
+  @@map("register_rows")
+}
+
+model ReconciliationResult {
+  id            Int               @id @default(autoincrement())
+  engagementId  Int               @map("engagement_id")
+  invoiceId     Int?              @map("invoice_id")
+  billOfSaleId  Int?              @map("bill_of_sale_id")
+  registerRowId Int?              @map("register_row_id")
+  matchStatus   String            @map("match_status")
+  matchScore    Float             @map("match_score")
+  remarks       String?
+  engagement    Engagement        @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  invoice       ExtractedInvoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  billOfSale    ExtractedBillOfSale? @relation(fields: [billOfSaleId], references: [id], onDelete: Cascade)
+  registerRow   RegisterRow?      @relation(fields: [registerRowId], references: [id], onDelete: Cascade)
+
+  @@map("reconciliation_results")
+}
+
+model ExceptionLog {
+  id           Int        @id @default(autoincrement())
+  engagementId Int        @map("engagement_id")
+  type         String
+  details      String?
+  status       String     @default("open")
+  remarks      String?
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@map("exceptions")
+}
+
+model BillOfSaleFile {
+  id           Int                  @id @default(autoincrement())
+  engagementId Int                  @map("engagement_id")
+  filename     String
+  filePath     String               @map("file_path")
+  status       String               @default("processing")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  engagement   Engagement           @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  extracted    ExtractedBillOfSale?
+
+  @@map("bill_of_sale_files")
+}
+
+model ExtractedBillOfSale {
+  id              Int                    @id @default(autoincrement())
+  fileId          Int                    @unique @map("file_id")
+  saleNumber      String?                @map("sale_number")
+  saleDate        DateTime?              @map("sale_date")
+  buyerName       String?                @map("buyer_name")
+  buyerGstin      String?                @map("buyer_gstin")
+  taxableValue    Float?                 @map("taxable_value")
+  totalValue      Float?                 @map("total_value")
+  cgst            Float?                 @map("cgst")
+  sgst            Float?                 @map("sgst")
+  igst            Float?                 @map("igst")
+  confidenceScore Float?                 @map("confidence_score")
+  status          String                 @default("pending_review")
+  file            BillOfSaleFile         @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  reconciliationResults ReconciliationResult[]
+
+  @@map("extracted_bills_of_sale")
+}
+
+model HsnRecommendation {
+  id                        Int        @id @default(autoincrement())
+  fileId                    Int        @unique @map("file_id")
+  engagementId              Int        @map("engagement_id")
+  itemDescription           String?    @map("item_description")
+  recommendedHsn            String?    @map("recommended_hsn")
+  recommendedHsnDescription String?    @map("recommended_hsn_description")
+  confidenceScore           Float      @default(0.0) @map("confidence_score")
+  status                    String     @default("NEEDS_REVIEW")
+  topAlternatives           String?    @map("top_alternatives") // JSON string
+  reasoning                 String?
+  acceptedHsn               String?    @map("accepted_hsn")
+  reviewedBy                String?    @map("reviewed_by")
+  createdAt                 DateTime   @default(now()) @map("created_at")
+  updatedAt                 DateTime   @default(now()) @updatedAt @map("updated_at")
+  engagement                Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@map("hsn_recommendations")
+}
+
+model TaxTypeMismatch {
+  id                   Int              @id @default(autoincrement())
+  invoiceId            Int              @unique @map("invoice_id")
+  engagementId         Int              @map("engagement_id")
+  isMismatch           Int              @default(0) @map("is_mismatch")
+  determinedSupplyType String?          @map("determined_supply_type")
+  expectedTaxType      String?          @map("expected_tax_type")
+  actualTaxType        String?          @map("actual_tax_type")
+  reason               String?
+  suggestion           String?
+  status               String           @default("CLEARED")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @default(now()) @updatedAt @map("updated_at")
+  invoice              ExtractedInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  engagement           Engagement       @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@map("tax_type_mismatches")
+}

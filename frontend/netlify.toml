@@ -1,0 +1,27 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+  functions = ".next/standalone/.netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Enable Next.js static optimization
+  SKIP_BUILD_CACHE = "false"
+
+# Handle SPA routing - rewrite all requests to the Netlify handler for Next.js
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/___netlify-handler"
+  status = 200
+  force = false
+
+# Cache control for static assets
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000"

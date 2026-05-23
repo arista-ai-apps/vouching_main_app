@@ -1,0 +1,57 @@
+# ─── Node / Next.js ───────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+.cache/
+
+# ─── Environment variables ────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+# Keep .env.example committed
+!.env.example
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# ─── Local Databases (never commit) ──────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+prisma/dev.db
+
+# ─── Uploaded Files / Storage ────────────────────────────────────────────────
+backend/storage/*
+backend/output/*
+!backend/storage/.gitkeep
+!backend/output/.gitkeep
+
+# ─── OS / IDE ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── Prisma ───────────────────────────────────────────────────────────────────
+# Keep migrations committed, exclude generated client
+frontend/node_modules/@prisma/client/

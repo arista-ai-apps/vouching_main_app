@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice Workflow Diagram</title>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'default', flowchart: { curve: 'basis' } });
+  </script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background:#f7f9fc; color:#1f2937; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    p { margin-top: 0; color:#4b5563; }
+    .wrap { background:#fff; border:1px solid #dbe3ee; border-radius:16px; padding:20px; box-shadow:0 6px 18px rgba(15,23,42,.06); }
+    .legend { margin-top:16px; display:grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap:10px; }
+    .legend div { background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; font-size:14px; }
+  </style>
+</head>
+<body>
+  <h1>Purchase Invoice Verification Workflow</h1>
+  <p>Workflow for extraction, purchase register match, GSTR-2B reconciliation, HSN review, ITC/compliance checks, and reviewer actions.</p>
+  <div class="wrap">
+    <pre class="mermaid">
+flowchart TD
+    A[Upload purchase invoice PDF] --> B[Classify as purchase invoice]
+    B --> C[Extract header fields
+Invoice no, date, supplier name, GSTIN, taxable value, GST, total]
+    C --> D[Extract line items
+Description, qty, rate, HSN/SAC, line value]
+    D --> E{Extraction confidence OK?}
+    E -- No --> E1[Send to manual review queue]
+    E -- Yes --> F[Normalize data
+Dates, GSTIN, invoice no, amounts]
+    E1 --> F
+
+    F --> G[Check against purchase register]
+    G --> G1[Match supplier GSTIN]
+    G1 --> G2[Match supplier name]
+    G2 --> G3[Match invoice number]
+    G3 --> G4[Match invoice date]
+    G4 --> G5[Match taxable value, GST, total value]
+    G5 --> G6{Register result}
+    G6 -- Exact --> H[Books match]
+    G6 -- Partial --> H1[Register mismatch flag]
+    G6 -- Invoice only --> H2[Missing in purchase register]
+    G6 -- Register only --> H3[Entry without supporting voucher]
+
+    H --> I[Check against GSTR-2B]
+    H1 --> I
+    H2 --> I
+    H3 --> I
+    I --> I1[Match supplier GSTIN]
+    I1 --> I2[Match invoice no and date]
+    I2 --> I3[Match taxable value and GST amount]
+    I3 --> I4{2B result}
+    I4 -- Present and matched --> J[ITC likely supported]
+    I4 -- Missing --> J1[Missing in 2B]
+    I4 -- Tax/value mismatch --> J2[2B mismatch]
+    I4 -- Period mismatch --> J3[Period review]
+
+    J --> K[HSN review]
+    J1 --> K
+    J2 --> K
+    J3 --> K
+    K --> K1{HSN on invoice?}
+    K1 -- Yes --> K2[Extract HSN at line-item level]
+    K1 -- No --> K3[Recommend HSN from description
++ master mapping + vendor history]
+    K2 --> K4{Confidence / consistency OK?}
+    K3 --> K4
+    K4 -- No --> K5[Force CA confirmation]
+    K4 -- Yes --> L[Save final HSN]
+    K5 --> L
+
+    L --> M[ITC eligibility checks]
+    M --> M1[Flag blocked / potentially ineligible ITC
+food, personal use, restricted categories]
+    M1 --> N[E-way bill checks]
+    N --> N1[If applicable, verify e-way bill no]
+    N1 --> O[TDS checks]
+    O --> O1[Threshold and applicability review]
+    O1 --> P[Duplicate / suspicious invoice checks]
+    P --> P1[Duplicate invoice no, repeated amount, unusual qty/rate]
+    P1 --> Q[Generate exception summary]
+    Q --> R{Reviewer action}
+    R -- Clear --> S[Status: Cleared]
+    R -- Note --> T[Status: Cleared with notes]
+    R -- Escalate --> U[Status: Exception / manager review]
+    R -- Hold --> V[Status: Pending clarification]
+    S --> W[Monthly verification report and dashboard]
+    T --> W
+    U --> W
+    V --> W
+    </pre>
+  </div>
+  <div class="legend">
+    <div><strong>Primary match keys:</strong> Supplier GSTIN, invoice number, invoice date, taxable value, GST amount, total value</div>
+    <div><strong>HSN rule:</strong> Extract if present, suggest if missing, force review if low confidence or inconsistent</div>
+    <div><strong>2B statuses:</strong> Present and matched, missing, mismatch, period review</div>
+    <div><strong>Final outputs:</strong> Cleared, cleared with notes, exception, pending clarification</div>
+  </div>
+</body>
+</html>
