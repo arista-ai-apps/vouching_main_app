@@ -1,7 +1,19 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+    // Use standalone mode for better Netlify compatibility
+    output: "standalone",
+    // Optimize for production
+    swcMinify: true,
+    // Compress optimized images
+    images: {
+          unoptimized: true, // Required for Netlify static export
+    },
+    // Ensure proper ISR configuration
+    onDemandEntries: {
+          maxInactiveAge: 60 * 1000, // 60 seconds
+          pagesBufferLength: 5,
+    },
 };
 
 export default nextConfig;
