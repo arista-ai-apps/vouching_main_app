@@ -5,6 +5,7 @@
 [build.environment]
   NODE_VERSION = "20"
   SKIP_BUILD_CACHE = "true"
+  PRISMA_GENERATE_SKIP_ENGINES = "true"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
