@@ -13,6 +13,7 @@
     "@libsql/client": "^0.8.0",
     "@prisma/adapter-libsql": "^5.22.0",
     "@prisma/client": "^5.22.0",
+    "busboy": "^1.6.0",
     "cloudinary": "^1.40.0",
     "clsx": "^2.1.1",
     "csv-parse": "^6.2.1",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.15.11",
     "@tailwindcss/postcss": "^4",
+    "@types/busboy": "^1.5.4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build"
+  command = "node prune-routes.js && npm run build"
   publish = ".next"
 
 [build.environment]
@@ -26,6 +26,25 @@
     "!node_modules/eslint/**",
     "!node_modules/@eslint/**"
   ]
+
+# Standalone Function CDN Rewrites
+[[redirects]]
+  from = "/api/v1/files/:id/process"
+  to = "/.netlify/functions/process-pdf?fileId=:id"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/v1/registers/upload-sales/:id"
+  to = "/.netlify/functions/upload-sales?engagementId=:id"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/v1/registers/upload-gstr2b/:id"
+  to = "/.netlify/functions/upload-gstr2b?engagementId=:id"
+  status = 200
+  force = true
 
 # Cache control for static assets
 [[headers]]

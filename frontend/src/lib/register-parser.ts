@@ -2,11 +2,13 @@
 import { parse as csvParse } from 'csv-parse/sync';
 import * as XLSX from 'xlsx';
 
-export async function parseRegisterFile(file: File): Promise<Record<string, string>[]> {
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+export async function parseRegisterFile(
+  file: File | { name: string; buffer: Buffer }
+): Promise<Record<string, string>[]> {
+  const buffer = 'buffer' in file ? file.buffer : Buffer.from(await file.arrayBuffer());
+  const filename = 'name' in file ? file.name : (file as any).name;
 
-  if (file.name.toLowerCase().endsWith('.csv')) {
+  if (filename.toLowerCase().endsWith('.csv')) {
     const text = buffer.toString('utf-8');
     return csvParse(text, { columns: true, skip_empty_lines: true, trim: true });
   } else {
