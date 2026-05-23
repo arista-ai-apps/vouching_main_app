@@ -11,9 +11,10 @@ export async function GET(
     const engagementId = parseInt(id);
 
     const files = await prisma.uploadedFile.findMany({
-      where: { engagementId, status: { in: ['extracted', 'completed'] } },
+      where: { engagementId, status: { in: ['extracted', 'completed', 'processing', 'uploaded'] } },
       include: {
-        invoices: { include: { hsnRecommendations: true } },
+        invoices: true,
+        hsnRecommendations: true,
       },
     });
 
@@ -24,7 +25,7 @@ export async function GET(
         const isMissing = !hsn || hsn === 'null' || hsn === 'None' || hsn === 'missing' || hsn === '0000';
         if (!isMissing) continue;
 
-        const rec = invoice.hsnRecommendations?.[0];
+        const rec = file.hsnRecommendations?.[0];
         missingHsnRows.push({
           file_id: file.id,
           filename: file.filename,
@@ -39,7 +40,7 @@ export async function GET(
             confidence_score: rec.confidenceScore,
             status: rec.status,
             reasoning: rec.reasoning,
-            top_alternatives: rec.topAlternatives ? JSON.parse(rec.topAlternatives) : [],
+            top_alternatives: rec.topAlternatives ? JSON.parse(rec.topAlternatives as string) : [],
             accepted_hsn: rec.acceptedHsn,
             reviewed_by: rec.reviewedBy,
           } : null,

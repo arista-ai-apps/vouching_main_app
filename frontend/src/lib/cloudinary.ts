@@ -24,7 +24,6 @@ export async function uploadPDF(
         public_id: `${engagementId}/${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
         folder,
         type: 'upload',
-        flags: ['immutable'],
       },
       (error, result) => {
         if (error) {

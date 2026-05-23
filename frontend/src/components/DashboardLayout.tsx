@@ -7,46 +7,24 @@ import { LogOut } from "lucide-react";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [period, setPeriod] = useState("March 2026");
-  const [checked, setChecked] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      // Auth guard
-      const storedLoginStatus = localStorage.getItem("isLoggedIn");
-      if (storedLoginStatus !== "true") {
-        setIsLoggedIn(false);
-        router.replace("/login");
-        return;
-      }
-      setIsLoggedIn(true);
-      // Period detection
-      const eid = localStorage.getItem("engagementId");
-      setPeriod(eid === "12" ? "April 2026" : "March 2026");
-      setChecked(true);
-    } else {
-      // Server-side: assume logged in to allow page to render
-      setChecked(true);
+    // Auth guard — runs only on client
+    const storedLoginStatus = localStorage.getItem("isLoggedIn");
+    if (storedLoginStatus !== "true") {
+      router.replace("/login");
+      return;
     }
+    // Period detection
+    const eid = localStorage.getItem("engagementId");
+    setPeriod(eid === "12" ? "April 2026" : "March 2026");
   }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem("isLoggedIn");
     router.push("/login");
   };
-
-  // Prevent flash of dashboard before auth check, but still render on server
-  if (!checked && typeof window !== "undefined") {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-slate-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen bg-[#f8fafc]">
