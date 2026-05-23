@@ -42,10 +42,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         return (
                 <div className="flex h-screen items-center justify-center bg-slate-50">
                         <div className="text-center">
-                                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>div>
-                                  <p className="mt-4 text-slate-600">Loading...</p>p>
-                        </div>div>
-                </div>div>
+                                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></di
+                                  <p className="mt-4 text-slate-600">Loading...</p>
+                        </di
+                </di
               );
   }
   
