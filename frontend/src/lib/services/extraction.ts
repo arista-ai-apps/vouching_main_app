@@ -55,7 +55,8 @@ async function getPdfOcrText(fileBuffer: Buffer): Promise<string> {
   'use server';
 
   try {
-    const pdf = await pdfjs.getDocument({ data: fileBuffer }).promise;
+    const data = new Uint8Array(fileBuffer.buffer, fileBuffer.byteOffset, fileBuffer.byteLength);
+    const pdf = await pdfjs.getDocument({ data }).promise;
     let fullText = '';
 
     for (let i = 1; i <= pdf.numPages; i++) {
