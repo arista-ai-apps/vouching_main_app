@@ -4,13 +4,14 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  SKIP_BUILD_CACHE = "false"
+  SKIP_BUILD_CACHE = "true"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
 [functions]
   included_files = [
+    "!.next/cache/**",
     "!node_modules/@next/**",
     "!node_modules/@prisma/engines/**",
     "!node_modules/@playwright/**",
