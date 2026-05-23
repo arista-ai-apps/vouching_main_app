@@ -9,6 +9,17 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+[functions]
+  included_files = [
+    "!node_modules/@next/swc-*/**/*",
+    "!node_modules/typescript/**/*",
+    "!node_modules/prisma/**/*",
+    "!node_modules/@prisma/engines/**/*",
+    "!node_modules/@playwright/**/*",
+    "!node_modules/playwright/**/*",
+    "!node_modules/playwright-core/**/*"
+  ]
+
 # Cache control for static assets
 [[headers]]
   for = "/_next/static/*"
