@@ -19,7 +19,36 @@ export async function GET(
       orderBy: { createdAt: 'desc' },
     });
 
-    const vouchers = results.flatMap((file) => {
+    interface Voucher {
+      id: number;
+      filename: string;
+      status: string;
+      invoice_number: string | null;
+      hsn_code: string | null;
+      invoice_date: Date | null;
+      vendor_name: string | null;
+      vendor_gstin: string | null;
+      buyer_name: string | null;
+      buyer_gstin: string | null;
+      shipping_address: string | null;
+      billing_address: string | null;
+      place_of_supply: string | null;
+      eway_bill_no: string | null;
+      description_of_goods: string | null;
+      taxable_value: number | null;
+      discount: number | null;
+      total_value: number | null;
+      cgst: number | null;
+      sgst: number | null;
+      igst: number | null;
+      cgst_rate: number | null;
+      sgst_rate: number | null;
+      igst_rate: number | null;
+      confidence_score: number | null;
+      match_status: string | null;
+    }
+
+    const vouchers = results.flatMap((file): Voucher[] => {
       if (file.invoices.length === 0) {
         return [{
           id: file.id, filename: file.filename, status: file.status,
