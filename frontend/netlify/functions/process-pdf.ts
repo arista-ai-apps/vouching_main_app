@@ -2,10 +2,27 @@ import { prisma } from '../../src/lib/prisma';
 import { extractInvoiceData } from '../../src/lib/services/extraction';
 import { reconcileSingleInvoice } from '../../src/lib/services/reconciliation';
 
+// Robust helper to extract ID from Netlify event path or query parameters
+function extractIdFromEvent(event: any): number | null {
+  // 1. Try to read from query params
+  if (event.queryStringParameters?.fileId) {
+    return parseInt(event.queryStringParameters.fileId);
+  }
+  // 2. Try to match from client request URL path (event.path or custom headers)
+  const pathToSearch = event.path || event.headers?.['x-nf-request-uri'] || '';
+  console.log(`[NETLIFY-FUNCTION] Parsing fileId from path: "${pathToSearch}"`);
+  
+  // Matches any digits between /files/ and /process or at the end
+  const fileIdMatch = pathToSearch.match(/\/files\/(\d+)\/process/) || pathToSearch.match(/\/(\d+)\/process/) || pathToSearch.match(/\/(\d+)\/?$/);
+  if (fileIdMatch) {
+    return parseInt(fileIdMatch[1]);
+  }
+  return null;
+}
+
 // Standalone Netlify Function for fire-and-forget async PDF processing.
 // Triggered via CDN rewrite from POST /api/v1/files/[id]/process.
 export async function handler(event: any) {
-  // Only allow POST
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -13,15 +30,15 @@ export async function handler(event: any) {
     };
   }
 
-  // Parse fileId from query parameters passed by CDN rewrite
-  const fileIdStr = event.queryStringParameters?.fileId;
-  if (!fileIdStr) {
+  // Parse fileId using robust path parsing helper
+  const fileId = extractIdFromEvent(event);
+  if (!fileId || isNaN(fileId)) {
+    console.error(`[NETLIFY-FUNCTION] ERROR: Could not parse fileId. Path: "${event.path}", Headers: ${JSON.stringify(event.headers)}, Query: ${JSON.stringify(event.queryStringParameters)}`);
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Missing fileId parameter' }),
+      body: JSON.stringify({ error: 'Missing or invalid fileId parameter' }),
     };
   }
-  const fileId = parseInt(fileIdStr);
 
   try {
     const body = JSON.parse(event.body || '{}');

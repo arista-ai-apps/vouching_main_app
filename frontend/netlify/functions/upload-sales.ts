@@ -35,6 +35,21 @@ function parseMultipartForm(event: any): Promise<{ file?: { filename: string; bu
   });
 }
 
+// Robust helper to extract engagementId from Netlify event path or query parameters
+function extractEngagementIdFromEvent(event: any): number | null {
+  if (event.queryStringParameters?.engagementId) {
+    return parseInt(event.queryStringParameters.engagementId);
+  }
+  const pathToSearch = event.path || event.headers?.['x-nf-request-uri'] || '';
+  console.log(`[NETLIFY-FUNCTION] Parsing engagementId from path: "${pathToSearch}"`);
+  
+  const match = pathToSearch.match(/\/upload-sales\/(\d+)/) || pathToSearch.match(/\/(\d+)\/?$/);
+  if (match) {
+    return parseInt(match[1]);
+  }
+  return null;
+}
+
 // Standalone Netlify Function for Sales Excel upload
 export async function handler(event: any) {
   if (event.httpMethod !== 'POST') {
@@ -44,14 +59,14 @@ export async function handler(event: any) {
     };
   }
 
-  const engagementIdStr = event.queryStringParameters?.engagementId;
-  if (!engagementIdStr) {
+  const engagementId = extractEngagementIdFromEvent(event);
+  if (!engagementId || isNaN(engagementId)) {
+    console.error(`[NETLIFY-FUNCTION] ERROR: Could not parse engagementId. Path: "${event.path}", Headers: ${JSON.stringify(event.headers)}, Query: ${JSON.stringify(event.queryStringParameters)}`);
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Missing engagementId' }),
+      body: JSON.stringify({ error: 'Missing or invalid engagementId' }),
     };
   }
-  const engagementId = parseInt(engagementIdStr);
 
   try {
     const { file } = await parseMultipartForm(event);

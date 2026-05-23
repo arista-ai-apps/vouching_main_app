@@ -241,7 +241,39 @@ export default function VoucherInbox() {
       formData.append("engagement_id", String(engagementId));
       try {
         const resp = await fetch(`/api/v1/files/upload`, { method: 'POST', body: formData });
-        if (!resp.ok) {
+        if (resp.ok) {
+          const dbFile = await resp.json();
+          
+          // Use FileReader to extract the base64 representation of the file in the browser 
+          // and fire the background AI process-pdf handler to bypass Netlify serverless freezing
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const base64String = (reader.result as string).split(',')[1];
+            try {
+              console.log(`[CLIENT-OCR] Triggering background extraction for file ${dbFile.id}...`);
+              fetch(`/api/v1/files/${dbFile.id}/process`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  engagement_id: engagementId,
+                  buffer_b64: base64String
+                })
+              }).then((processResp) => {
+                if (processResp.ok) {
+                  console.log(`[CLIENT-OCR] AI extraction & reconciliation succeeded for ${dbFile.id}`);
+                  fetchVouchers();
+                } else {
+                  console.error(`[CLIENT-OCR] AI extraction failed for ${dbFile.id}`);
+                }
+              }).catch((e) => {
+                console.error(`[CLIENT-OCR] Network error triggering processing for ${dbFile.id}:`, e);
+              });
+            } catch (err) {
+              console.error("[CLIENT-OCR] Failed inside load block:", err);
+            }
+          };
+          reader.readAsDataURL(file);
+        } else {
           const err = await resp.json().catch(() => ({}));
           console.error("Upload failed for", file.name, err);
         }

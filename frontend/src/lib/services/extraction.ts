@@ -51,8 +51,6 @@ The output MUST be a valid JSON object matching this schema:
 If a field is not found, use null for scalars, and empty array [] for items. Convert rates to flat numeric floats (e.g., 9% -> 9.0).`;
 
 async function getPdfOcrText(fileBuffer: Buffer): Promise<string> {
-  'use server';
-
   try {
     const data = new Uint8Array(fileBuffer.buffer, fileBuffer.byteOffset, fileBuffer.byteLength);
     const pdf = await pdfjs.getDocument({ data }).promise;
