@@ -42,10 +42,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         return (
                 <div className="flex h-screen items-center justify-center bg-slate-50">
                         <div className="text-center">
-                                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></di
-                                  <p className="mt-4 text-slate-600">Loading...</p>
-                        </di
-                </di
+                                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                  <p className="mt-4 text-slate-600">Loading...</
+                        </div>
+                </div>
               );
   }
   
@@ -60,8 +60,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                               </h2>h2>
                                               <div className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] font-black uppercase tracking-wider">
                                                             Engagement: {period}
-                                              </div>div>
-                                  </div>div>
+                                              </div>v>v>div>
+                                  </div>v>v>div>
                                   <div className="flex items-center gap-3">
                                               <span className="text-sm text-slate-500">User: Admin</span>span>
                                               <button
@@ -71,10 +71,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                                             >
                                                             <LogOut size={18} />
                                               </button>button>
-                                  </div>div>
+                                  </div>v>v>div>
                         </header>header>
                         <main className="flex-1 overflow-auto">{children}</main>main>
-                </div>div>
-          </div>div>
+                </div>v>v>div>
+          </div>v>v>div>
         );
-}</div>
+}</div>v>v>
