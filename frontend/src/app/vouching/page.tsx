@@ -233,12 +233,18 @@ export default function VoucherInbox() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    if (!engagementId) { alert('No engagement selected. Please set up an engagement first.'); return; }
     setUploading(true);
     for (const file of Array.from(files)) {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("engagement_id", String(engagementId));
       try {
-        await fetch(`${API_BASE}/files/upload/${engagementId}`, { method: 'POST', body: formData });
+        const resp = await fetch(`/api/v1/files/upload`, { method: 'POST', body: formData });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          console.error("Upload failed for", file.name, err);
+        }
       } catch (err) { console.error("Upload failed for", file.name, err); }
     }
     setUploading(false);
