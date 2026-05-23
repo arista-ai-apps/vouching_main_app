@@ -1,11 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Use standalone mode for better Netlify compatibility
-  output: "standalone",
-  // Compress optimized images
+  // Images - unoptimized for Netlify CDN
   images: {
-    unoptimized: true, // Required for Netlify static export
+    unoptimized: true,
   },
   // Ensure proper ISR configuration
   onDemandEntries: {

@@ -1,19 +1,13 @@
 [build]
   command = "npm run build"
   publish = ".next"
-  functions = ".next/standalone/.netlify/functions"
 
 [build.environment]
   NODE_VERSION = "20"
-  # Enable Next.js static optimization
   SKIP_BUILD_CACHE = "false"
 
-# Handle SPA routing - rewrite all requests to the Netlify handler for Next.js
-[[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/___netlify-handler"
-  status = 200
-  force = false
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 # Cache control for static assets
 [[headers]]
