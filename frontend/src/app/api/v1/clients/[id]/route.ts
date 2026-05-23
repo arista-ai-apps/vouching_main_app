@@ -4,10 +4,11 @@ import { prisma } from '@/lib/prisma';
 // GET /api/v1/clients/:id
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const clientId = parseInt(params.id);
+    const { id } = await params;
+    const clientId = parseInt(id);
 
     const client = await prisma.client.findUnique({
       where: { id: clientId },
@@ -36,10 +37,11 @@ export async function GET(
 // PUT /api/v1/clients/:id
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const clientId = parseInt(params.id);
+    const { id } = await params;
+    const clientId = parseInt(id);
     const body = await request.json();
     const { name, pan, gstin, address } = body;
 
@@ -66,10 +68,11 @@ export async function PUT(
 // DELETE /api/v1/clients/:id
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const clientId = parseInt(params.id);
+    const { id } = await params;
+    const clientId = parseInt(id);
 
     await prisma.client.delete({
       where: { id: clientId },

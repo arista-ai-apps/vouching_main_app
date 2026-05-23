@@ -4,10 +4,11 @@ import { prisma } from '@/lib/prisma';
 // GET /api/v1/engagements/:id
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const engagementId = parseInt(params.id);
+    const { id } = await params;
+    const engagementId = parseInt(id);
 
     const engagement = await prisma.engagement.findUnique({
       where: { id: engagementId },
@@ -38,10 +39,11 @@ export async function GET(
 // PUT /api/v1/engagements/:id
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const engagementId = parseInt(params.id);
+    const { id } = await params;
+    const engagementId = parseInt(id);
     const body = await request.json();
     const { period_start, period_end, status } = body;
 
@@ -70,10 +72,11 @@ export async function PUT(
 // DELETE /api/v1/engagements/:id
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const engagementId = parseInt(params.id);
+    const { id } = await params;
+    const engagementId = parseInt(id);
 
     await prisma.engagement.delete({
       where: { id: engagementId },
