@@ -11,6 +11,8 @@
   package = "@netlify/plugin-nextjs"
 
 [functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["canvas"]
   included_files = [
     "!.next/cache/**",
     "node_modules/.prisma/client/schema.prisma",

@@ -55,3 +55,6 @@ yarn-error.log*
 # ─── Prisma ───────────────────────────────────────────────────────────────────
 # Keep migrations committed, exclude generated client
 frontend/node_modules/@prisma/client/
+
+# Local Netlify folder
+.netlify
