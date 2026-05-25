@@ -48,7 +48,7 @@ async function verifyTurso() {
     console.log(`\n🔄 [ReconciliationResult] Last 5 match links stored on Turso:`);
     for (const res of results) {
       console.log(`   - ID: ${res.id} | Match Status: [ ${res.matchStatus.toUpperCase()} ] | Score: ${res.matchScore}%`);
-      console.log(`     └─ Extracted Invoice: ID ${res.extractedInvoiceId} ("${res.invoice?.invoiceNumber}" from "${res.invoice?.vendorName}")`);
+      console.log(`     └─ Extracted Invoice: ID ${res.invoiceId} ("${res.invoice?.invoiceNumber}" from "${res.invoice?.vendorName}")`);
       if (res.registerRow) {
         console.log(`     └─ Register Row: ID ${res.registerRowId} ("${res.registerRow?.invoiceNumber}" from "${res.registerRow?.vendorName}")`);
       } else {
