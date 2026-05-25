@@ -30,8 +30,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File too large (max 50MB)' }, { status: 400 });
     }
 
-    // Read buffer now — must happen before responding
-    const buffer = Buffer.from(await file.arrayBuffer());
 
     // Create DB record — filePath is empty since we no longer store PDFs
     const dbFile = await prisma.uploadedFile.create({
@@ -43,21 +41,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Fire-and-forget: pass buffer as base64 to the process route.
-    // We do NOT await this — response goes back to the client immediately.
-    const baseUrl = request.nextUrl.origin;
-    fetch(`${baseUrl}/api/v1/files/${dbFile.id}/process`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        engagement_id: parseInt(engagementId),
-        buffer_b64: buffer.toString('base64'),
-      }),
-    }).catch(err =>
-      console.error(`[UPLOAD] Failed to trigger processing for file ${dbFile.id}:`, err)
-    );
-
-    console.log(`[UPLOAD] File ${dbFile.id} (${file.name}) queued — responding immediately.`);
+    // NOTE: Processing is triggered by the browser client (vouching/page.tsx)
+    // which sends the base64 buffer directly to /.netlify/functions/process-pdf-background.
+    // We do NOT trigger it here — serverless containers freeze after responding.
+    console.log(`[UPLOAD] File ${dbFile.id} (${file.name}) record created — browser will trigger processing.`);
 
     return NextResponse.json({
       id: dbFile.id,
