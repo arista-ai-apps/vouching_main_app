@@ -12,6 +12,15 @@ const pathsToDelete = [
   path.join(__dirname, 'src/app/api/v1/registers/upload-gstr2b')
 ];
 
+// Always wipe the .next build cache first.
+// Netlify caches .next between builds — if routes were deleted, stale
+// .next/dev/types/validator.ts still references the old routes and fails tsc.
+const nextDir = path.join(__dirname, '.next');
+if (fs.existsSync(nextDir)) {
+  fs.rmSync(nextDir, { recursive: true, force: true });
+  console.log('[PRE-BUILD-PRUNE] Cleared stale .next build cache');
+}
+
 console.log('[PRE-BUILD-PRUNE] Checking for heavy Next.js API routes to prune...');
 
 pathsToDelete.forEach((p) => {
