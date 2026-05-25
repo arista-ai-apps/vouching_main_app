@@ -1,10 +1,6 @@
-import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.js';
+import pdfParse from 'pdf-parse';
 import { OpenAI } from 'openai';
 import { prisma } from '../prisma';
-
-// Node.js server: disable web worker (pdfjs runs inline)
-pdfjs.GlobalWorkerOptions.workerSrc = '';
-
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -52,23 +48,8 @@ If a field is not found, use null for scalars, and empty array [] for items. Con
 
 async function getPdfOcrText(fileBuffer: Buffer): Promise<string> {
   try {
-    const data = new Uint8Array(fileBuffer.buffer, fileBuffer.byteOffset, fileBuffer.byteLength);
-    const pdf = await pdfjs.getDocument({ data }).promise;
-    let fullText = '';
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-
-      for (const item of textContent.items) {
-        if ('str' in item) {
-          fullText += item.str + ' ';
-        }
-      }
-      fullText += '\n';
-    }
-
-    return fullText;
+    const data = await pdfParse(fileBuffer);
+    return data.text || '';
   } catch (error) {
     console.error('[EXTRACTION] PDF extraction error:', error);
     throw new Error('Failed to extract text from PDF');
