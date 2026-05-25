@@ -1,5 +1,5 @@
 import { prisma } from '../../src/lib/prisma';
-import { extractInvoiceData } from '../../src/lib/services/extraction';
+import { extractInvoiceDataFromText } from '../../src/lib/services/extraction';
 import { runFullReconciliation } from '../../src/lib/services/reconciliation';
 
 // Robust helper to extract ID from Netlify event path or query parameters
@@ -42,20 +42,19 @@ export async function handler(event: any) {
 
   try {
     const body = JSON.parse(event.body || '{}');
-    const { engagement_id, buffer_b64 } = body;
+    const { engagement_id, ocr_text } = body;
 
-    if (!buffer_b64) {
+    if (!ocr_text) {
       await prisma.uploadedFile.update({ where: { id: fileId }, data: { status: 'failed' } }).catch(() => {});
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'No buffer provided' }),
+        body: JSON.stringify({ error: 'No ocr_text provided — browser must extract PDF text before calling this function' }),
       };
     }
 
-    const buffer = Buffer.from(buffer_b64, 'base64');
-    console.log(`[NETLIFY-FUNCTION] Extracting file ${fileId} (${(buffer.length / 1024).toFixed(0)}KB)...`);
+    console.log(`[NETLIFY-FUNCTION] Processing file ${fileId} — received ${ocr_text.length} chars of OCR text from browser...`);
 
-    await extractInvoiceData(buffer, fileId, parseInt(engagement_id));
+    await extractInvoiceDataFromText(ocr_text, fileId, parseInt(engagement_id));
 
     // Bulk-reconcile all invoices in the engagement (4 queries, in-memory matching)
     console.log(`[NETLIFY-FUNCTION] Running bulk reconciliation for engagement ${engagement_id}...`);

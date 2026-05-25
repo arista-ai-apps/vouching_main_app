@@ -1,7 +1,9 @@
-const pdfjs = require('pdfjs-dist/legacy/build/pdf.js');
-pdfjs.GlobalWorkerOptions.workerSrc = '';
 import { OpenAI } from 'openai';
 import { prisma } from '../prisma';
+
+// NOTE: PDF text extraction is done in the BROWSER using pdfjs-dist.
+// This module only receives pre-extracted OCR text and calls OpenAI.
+// This keeps the server-side Lambda bundle small and dependency-free.
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -47,26 +49,6 @@ The output MUST be a valid JSON object matching this schema:
 }
 If a field is not found, use null for scalars, and empty array [] for items. Convert rates to flat numeric floats (e.g., 9% -> 9.0).`;
 
-async function getPdfOcrText(fileBuffer: Buffer): Promise<string> {
-  try {
-    const data = new Uint8Array(fileBuffer.buffer, fileBuffer.byteOffset, fileBuffer.byteLength);
-    const pdf = await pdfjs.getDocument({ data }).promise;
-    let fullText = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      for (const item of textContent.items) {
-        if ('str' in item) fullText += item.str + ' ';
-      }
-      fullText += '\n';
-    }
-    return fullText;
-  } catch (error) {
-    console.error('[EXTRACTION] PDF extraction error:', error);
-    throw new Error('Failed to extract text from PDF');
-  }
-}
-
 export interface ExtractedInvoiceData {
   invoice_number: string | null;
   hsn_code: string | null;
@@ -101,121 +83,106 @@ export interface ExtractedInvoiceData {
   }>;
 }
 
-export async function extractInvoiceData(
-  fileBuffer: Buffer,
+async function callOpenAiAndSave(
+  ocrText: string,
   fileId: number,
-  engagementId: number
 ): Promise<ExtractedInvoiceData> {
-  console.log(`[EXTRACTION] Starting OCR extraction for file_id: ${fileId}`);
+  console.log(`[EXTRACTION] Sending ${ocrText.length} chars to OpenAI for file ${fileId}...`);
 
-  try {
-    // Update file status to processing
-    await prisma.uploadedFile.update({
-      where: { id: fileId },
-      data: { status: 'processing' },
-    });
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: `Extract details from this invoice OCR text:\n\n${ocrText}` },
+    ],
+    response_format: { type: 'json_object' },
+  });
 
-    // Extract text from PDF
-    console.log('[EXTRACTION] Extracting text from PDF...');
-    const ocrText = await getPdfOcrText(fileBuffer);
-    console.log(`[EXTRACTION] Text extracted (${ocrText.length} chars). Sending to OpenAI...`);
+  const content = response.choices[0].message.content;
+  if (!content) throw new Error('No response from OpenAI');
 
-    // Call OpenAI to extract invoice data
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `Extract details from this invoice OCR text:\n\n${ocrText}`,
-        },
-      ],
-      response_format: { type: 'json_object' },
-    });
+  console.log('[EXTRACTION] AI raw response:', content.substring(0, 200));
+  const extractedData = JSON.parse(content) as ExtractedInvoiceData;
 
-    const content = response.choices[0].message.content;
-    if (!content) {
-      throw new Error('No response from OpenAI');
+  // Parse date safely
+  let invDate: Date | null = null;
+  if (extractedData.invoice_date) {
+    try {
+      const dateStr = String(extractedData.invoice_date).trim();
+      const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+      invDate = new Date(dateOnly);
+      if (isNaN(invDate.getTime())) invDate = null;
+    } catch (e) {
+      console.warn('[EXTRACTION] Date parsing failed:', e);
+      invDate = null;
     }
-
-    console.log('[EXTRACTION] AI raw response:', content.substring(0, 200));
-    const extractedData = JSON.parse(content) as ExtractedInvoiceData;
-
-    // Parse date safely
-    let invDate: Date | null = null;
-    if (extractedData.invoice_date) {
-      try {
-        const dateStr = String(extractedData.invoice_date).trim();
-        const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-        invDate = new Date(dateOnly);
-        if (isNaN(invDate.getTime())) {
-          invDate = null;
-        }
-      } catch (e) {
-        console.warn('[EXTRACTION] Date parsing failed:', e);
-        invDate = null;
-      }
-    }
-
-    // Create ExtractedInvoice record
-    const invoice = await prisma.extractedInvoice.create({
-      data: {
-        fileId,
-        invoiceNumber: extractedData.invoice_number,
-        hsnCode: extractedData.hsn_code,
-        invoiceDate: invDate,
-        vendorName: extractedData.vendor_name,
-        vendorGstin: extractedData.vendor_gstin,
-        buyerName: extractedData.buyer_name,
-        buyerGstin: extractedData.buyer_gstin,
-        shippingAddress: extractedData.shipping_address,
-        billingAddress: extractedData.billing_address,
-        placeOfSupply: extractedData.place_of_supply,
-        descriptionOfGoods: extractedData.description_of_goods,
-        ewayBillNo: extractedData.eway_bill_no,
-        taxableValue: extractedData.taxable_value,
-        discount: extractedData.discount,
-        totalValue: extractedData.total_value,
-        cgst: extractedData.cgst,
-        sgst: extractedData.sgst,
-        igst: extractedData.igst,
-        cgstRate: extractedData.cgst_rate,
-        sgstRate: extractedData.sgst_rate,
-        igstRate: extractedData.igst_rate,
-        confidenceScore: extractedData.confidence_score,
-        status: 'extracted',
-        items: {
-          create: extractedData.items?.map((item) => ({
-            description: item.description,
-            hsnCode: item.hsn_code,
-            quantity: item.quantity,
-            unit: item.unit,
-            unitPrice: item.unit_price,
-            discount: item.discount,
-            taxableValue: item.taxable_value,
-          })) || [],
-        },
-      },
-      include: { items: true },
-    });
-
-    // Update file status to extracted
-    await prisma.uploadedFile.update({
-      where: { id: fileId },
-      data: { status: 'extracted' },
-    });
-
-    console.log(`[EXTRACTION] Invoice extraction complete: ${invoice.invoiceNumber}`);
-    return extractedData;
-  } catch (error) {
-    console.error('[EXTRACTION] Error:', error);
-
-    // Update file status to failed
-    await prisma.uploadedFile.update({
-      where: { id: fileId },
-      data: { status: 'failed' },
-    });
-
-    throw error;
   }
+
+  // Create ExtractedInvoice record in DB
+  const invoice = await prisma.extractedInvoice.create({
+    data: {
+      fileId,
+      invoiceNumber: extractedData.invoice_number,
+      hsnCode: extractedData.hsn_code,
+      invoiceDate: invDate,
+      vendorName: extractedData.vendor_name,
+      vendorGstin: extractedData.vendor_gstin,
+      buyerName: extractedData.buyer_name,
+      buyerGstin: extractedData.buyer_gstin,
+      shippingAddress: extractedData.shipping_address,
+      billingAddress: extractedData.billing_address,
+      placeOfSupply: extractedData.place_of_supply,
+      descriptionOfGoods: extractedData.description_of_goods,
+      ewayBillNo: extractedData.eway_bill_no,
+      taxableValue: extractedData.taxable_value,
+      discount: extractedData.discount,
+      totalValue: extractedData.total_value,
+      cgst: extractedData.cgst,
+      sgst: extractedData.sgst,
+      igst: extractedData.igst,
+      cgstRate: extractedData.cgst_rate,
+      sgstRate: extractedData.sgst_rate,
+      igstRate: extractedData.igst_rate,
+      confidenceScore: extractedData.confidence_score,
+      status: 'extracted',
+      items: {
+        create: extractedData.items?.map((item) => ({
+          description: item.description,
+          hsnCode: item.hsn_code,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: item.unit_price,
+          discount: item.discount,
+          taxableValue: item.taxable_value,
+        })) || [],
+      },
+    },
+    include: { items: true },
+  });
+
+  await prisma.uploadedFile.update({
+    where: { id: fileId },
+    data: { status: 'extracted' },
+  });
+
+  console.log(`[EXTRACTION] Invoice extraction complete: ${invoice.invoiceNumber}`);
+  return extractedData;
 }
+
+/**
+ * Primary entry point: accepts OCR text pre-extracted by the browser.
+ * The browser uses pdfjs-dist (runs perfectly client-side) to extract text
+ * and sends it here, keeping the Lambda bundle free of any PDF library.
+ */
+export async function extractInvoiceDataFromText(
+  ocrText: string,
+  fileId: number,
+  engagementId: number,
+): Promise<ExtractedInvoiceData> {
+  console.log(`[EXTRACTION] Starting AI parsing for file_id: ${fileId}, engagement: ${engagementId}`);
+  await prisma.uploadedFile.update({ where: { id: fileId }, data: { status: 'processing' } });
+  return callOpenAiAndSave(ocrText, fileId);
+}
+
+// Keep backward-compatible alias used by local dev / reprocess route
+export { extractInvoiceDataFromText as extractInvoiceData };

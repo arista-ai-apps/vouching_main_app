@@ -63,6 +63,51 @@ function ConfidenceBadge({ status, score }: { status: string; score: number }) {
   );
 }
 
+// ─── Browser PDF text extractor ────────────────────────────────────────────────
+const extractTextFromPdfBrowser = async (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const arrayBuffer = reader.result as ArrayBuffer;
+        
+        // Dynamically load pdfjs from CDN if not already loaded in window
+        if (!(window as any).pdfjsLib) {
+          await new Promise<void>((res, rej) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            script.onload = () => res();
+            script.onerror = () => rej(new Error('Failed to load PDF.js script from CDN'));
+            document.head.appendChild(script);
+          });
+        }
+        
+        const pdfjsLib = (window as any).pdfjsLib;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+        const pdf = await loadingTask.promise;
+        let fullText = '';
+        
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item: any) => item.str || '')
+            .join(' ');
+          fullText += pageText + '\n';
+        }
+        
+        resolve(fullText);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file in browser'));
+    reader.readAsArrayBuffer(file);
+  });
+};
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function VoucherInbox() {
@@ -244,46 +289,43 @@ export default function VoucherInbox() {
         if (resp.ok) {
           const dbFile = await resp.json();
           
-          // Use FileReader to extract the base64 representation of the file in the browser 
-          // Fire the Netlify background function DIRECTLY — bypassing the CDN rewrite.
-          // Netlify rewrites do NOT reliably forward large POST bodies (base64 PDF data).
-          // On localhost fall back to the Next.js API route.
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const base64String = (reader.result as string).split(',')[1];
-            try {
-              const isNetlify = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
-              const processUrl = isNetlify
-                ? `/.netlify/functions/process-pdf-background?fileId=${dbFile.id}`
-                : `/api/v1/files/${dbFile.id}/process`;
+          // Extract PDF text in the browser client-side
+          // Sends the plain-text OCR data to the Netlify background function,
+          // keeping the Lambda package small and dependency-free.
+          try {
+            console.log(`[CLIENT-OCR] Extracting text locally in browser for file ${dbFile.id}...`);
+            const ocrText = await extractTextFromPdfBrowser(file);
+            console.log(`[CLIENT-OCR] Extracted ${ocrText.length} characters of text. Triggering background extraction...`);
 
-              console.log(`[CLIENT-OCR] Triggering background extraction for file ${dbFile.id} via ${processUrl}...`);
-              fetch(processUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  engagement_id: engagementId,
-                  buffer_b64: base64String
-                })
-              }).then((processResp) => {
-                // Background function returns 202 immediately — that means it was queued successfully.
-                // Actual completion is reflected in DB and picked up by the 3-second polling interval.
-                if (processResp.ok || processResp.status === 202) {
-                  console.log(`[CLIENT-OCR] Background function queued for file ${dbFile.id} (status ${processResp.status}). Polling will update UI.`);
-                  fetchVouchers();
-                } else {
-                  processResp.text().then(body => {
-                    console.error(`[CLIENT-OCR] Background function error for ${dbFile.id}: ${processResp.status} — ${body}`);
-                  });
-                }
-              }).catch((e) => {
-                console.error(`[CLIENT-OCR] Network error triggering processing for ${dbFile.id}:`, e);
-              });
-            } catch (err) {
-              console.error("[CLIENT-OCR] Failed inside load block:", err);
-            }
-          };
-          reader.readAsDataURL(file);
+            const isNetlify = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+            const processUrl = isNetlify
+              ? `/.netlify/functions/process-pdf-background?fileId=${dbFile.id}`
+              : `/api/v1/files/${dbFile.id}/process`;
+
+            console.log(`[CLIENT-OCR] Triggering background extraction for file ${dbFile.id} via ${processUrl}...`);
+            fetch(processUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                engagement_id: engagementId,
+                ocr_text: ocrText
+              })
+            }).then((processResp) => {
+              if (processResp.ok || processResp.status === 202) {
+                console.log(`[CLIENT-OCR] Background function queued for file ${dbFile.id} (status ${processResp.status}). Polling will update UI.`);
+                fetchVouchers();
+              } else {
+                processResp.text().then(body => {
+                  console.error(`[CLIENT-OCR] Background function error for ${dbFile.id}: ${processResp.status} — ${body}`);
+                });
+              }
+            }).catch((e) => {
+              console.error(`[CLIENT-OCR] Network error triggering processing for ${dbFile.id}:`, e);
+            });
+          } catch (err: any) {
+            console.error("[CLIENT-OCR] Local extraction failed:", err);
+            alert(`Failed to extract text from PDF: ${err.message || err}`);
+          }
         } else {
           const err = await resp.json().catch(() => ({}));
           console.error("Upload failed for", file.name, err);

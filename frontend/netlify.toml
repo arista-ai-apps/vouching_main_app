@@ -12,7 +12,6 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["canvas", "pdfjs-dist"]
   included_files = [
     "!.next/cache/**",
     "node_modules/.prisma/client/schema.prisma",
