@@ -245,13 +245,20 @@ export default function VoucherInbox() {
           const dbFile = await resp.json();
           
           // Use FileReader to extract the base64 representation of the file in the browser 
-          // and fire the background AI process-pdf handler to bypass Netlify serverless freezing
+          // Fire the Netlify background function DIRECTLY — bypassing the CDN rewrite.
+          // Netlify rewrites do NOT reliably forward large POST bodies (base64 PDF data).
+          // On localhost fall back to the Next.js API route.
           const reader = new FileReader();
           reader.onload = async () => {
             const base64String = (reader.result as string).split(',')[1];
             try {
-              console.log(`[CLIENT-OCR] Triggering background extraction for file ${dbFile.id}...`);
-              fetch(`/api/v1/files/${dbFile.id}/process`, {
+              const isNetlify = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+              const processUrl = isNetlify
+                ? `/.netlify/functions/process-pdf-background?fileId=${dbFile.id}`
+                : `/api/v1/files/${dbFile.id}/process`;
+
+              console.log(`[CLIENT-OCR] Triggering background extraction for file ${dbFile.id} via ${processUrl}...`);
+              fetch(processUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -259,11 +266,15 @@ export default function VoucherInbox() {
                   buffer_b64: base64String
                 })
               }).then((processResp) => {
-                if (processResp.ok) {
-                  console.log(`[CLIENT-OCR] AI extraction & reconciliation succeeded for ${dbFile.id}`);
+                // Background function returns 202 immediately — that means it was queued successfully.
+                // Actual completion is reflected in DB and picked up by the 3-second polling interval.
+                if (processResp.ok || processResp.status === 202) {
+                  console.log(`[CLIENT-OCR] Background function queued for file ${dbFile.id} (status ${processResp.status}). Polling will update UI.`);
                   fetchVouchers();
                 } else {
-                  console.error(`[CLIENT-OCR] AI extraction failed for ${dbFile.id}`);
+                  processResp.text().then(body => {
+                    console.error(`[CLIENT-OCR] Background function error for ${dbFile.id}: ${processResp.status} — ${body}`);
+                  });
                 }
               }).catch((e) => {
                 console.error(`[CLIENT-OCR] Network error triggering processing for ${dbFile.id}:`, e);
