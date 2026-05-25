@@ -1,6 +1,6 @@
 import { prisma } from '../../src/lib/prisma';
 import { extractInvoiceData } from '../../src/lib/services/extraction';
-import { reconcileSingleInvoice } from '../../src/lib/services/reconciliation';
+import { runFullReconciliation } from '../../src/lib/services/reconciliation';
 
 // Robust helper to extract ID from Netlify event path or query parameters
 function extractIdFromEvent(event: any): number | null {
@@ -57,11 +57,9 @@ export async function handler(event: any) {
 
     await extractInvoiceData(buffer, fileId, parseInt(engagement_id));
 
-    const invoice = await prisma.extractedInvoice.findFirst({ where: { fileId } });
-    if (invoice) {
-      console.log(`[NETLIFY-FUNCTION] Reconciling invoice ${invoice.id}...`);
-      await reconcileSingleInvoice(invoice.id);
-    }
+    // Bulk-reconcile all invoices in the engagement (4 queries, in-memory matching)
+    console.log(`[NETLIFY-FUNCTION] Running bulk reconciliation for engagement ${engagement_id}...`);
+    await runFullReconciliation(parseInt(engagement_id));
 
     await prisma.uploadedFile.update({
       where: { id: fileId },
