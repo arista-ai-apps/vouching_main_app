@@ -33,7 +33,7 @@
 # Standalone Function CDN Rewrites
 [[redirects]]
   from = "/api/v1/files/:id/process"
-  to = "/.netlify/functions/process-pdf?fileId=:id"
+  to = "/.netlify/functions/process-pdf-background?fileId=:id"
   status = 200
   force = true
 
