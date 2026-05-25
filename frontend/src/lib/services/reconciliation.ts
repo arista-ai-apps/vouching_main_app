@@ -138,20 +138,77 @@ export async function reconcileSingleInvoice(invoiceId: number): Promise<void> {
 }
 
 export async function runFullReconciliation(engagementId: number): Promise<void> {
-  console.log(`[RECONCILIATION] Starting full reconciliation for engagement: ${engagementId}`);
+  console.log(`[RECONCILIATION] Starting high-performance bulk reconciliation for engagement: ${engagementId}`);
 
   try {
+    // 1. Fetch all register rows for this engagement once
+    const registers = await prisma.registerRow.findMany({
+      where: { register: { engagementId } },
+    });
+
+    // 2. Fetch all invoices for this engagement once
     const invoices = await prisma.extractedInvoice.findMany({
       where: { file: { engagementId } },
     });
 
+    const resultsData = [];
+
+    // 3. Match in-memory with zero network roundtrips
     for (const invoice of invoices) {
-      await reconcileSingleInvoice(invoice.id);
+      let bestMatch: { registerRow: (typeof registers)[0]; score: number } | null = null;
+
+      for (const reg of registers) {
+        const score = calculateSimilarityScore(
+          {
+            id: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            invoiceDate: invoice.invoiceDate,
+            vendorName: invoice.vendorName,
+            taxableValue: invoice.taxableValue,
+            totalValue: invoice.totalValue,
+          },
+          {
+            invoice_number: reg.invoiceNumber,
+            invoice_date: reg.invoiceDate,
+            vendor_name: reg.vendorName,
+            taxable_value: reg.taxableValue,
+            total_value: reg.totalValue,
+          }
+        );
+        if (!bestMatch || score > bestMatch.score) {
+          bestMatch = { registerRow: reg, score };
+        }
+      }
+
+      const matchStatus =
+        registers.length === 0
+          ? 'no_register'
+          : bestMatch && bestMatch.score > 60
+          ? 'matched'
+          : 'unmatched';
+
+      resultsData.push({
+        engagementId,
+        invoiceId: invoice.id,
+        registerRowId: bestMatch?.registerRow.id ?? null,
+        matchStatus,
+        matchScore: bestMatch?.score ?? 0,
+      });
     }
 
-    console.log(`[RECONCILIATION] Full reconciliation complete for engagement: ${engagementId}`);
+    // 4. Delete existing results in one query
+    await prisma.reconciliationResult.deleteMany({ where: { engagementId } });
+
+    // 5. Bulk insert new results in one query
+    if (resultsData.length > 0) {
+      await prisma.reconciliationResult.createMany({
+        data: resultsData,
+      });
+    }
+
+    console.log(`[RECONCILIATION] Bulk reconciliation complete. Reconciled ${invoices.length} invoices against ${registers.length} register rows.`);
   } catch (error) {
-    console.error('[RECONCILIATION] Error:', error);
+    console.error('[RECONCILIATION] Bulk reconciliation error:', error);
     throw error;
   }
 }
